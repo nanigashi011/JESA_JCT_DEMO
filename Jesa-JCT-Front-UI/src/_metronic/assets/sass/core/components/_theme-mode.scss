@@ -1,0 +1,68 @@
+//
+// Theme Modes
+//
+
+// Used for theme mode switching via JS
+[data-kt-theme-mode-switching="true"] * {
+    transition: none !important;
+}
+
+// Light mode
+@include color-mode(light) {
+	.theme-dark-show {
+		display: none !important;		
+	}
+
+	.theme-light-bg-transparent {
+		background-color: transparent !important;	
+	}
+
+	.theme-light-bg-body {
+		background-color: var(--#{$prefix}body-bg) !important;	
+	}
+}
+
+// Dark mode
+@include color-mode(dark) {
+	.theme-light-show {
+		display: none !important;		
+	}
+
+	.theme-dark-bg-transparent {
+		background-color: transparent !important;	
+	}
+
+	.theme-dark-bg-body {
+		background-color: var(--#{$prefix}body-bg) !important;	
+	}
+}
+
+// Dark Blue mode
+[data-bs-theme="dark_blue"] {
+	.theme-light-show {
+		display: none !important;		
+	}
+
+	.theme-dark-bg-transparent {
+		background-color: transparent !important;	
+	}
+
+	.theme-dark-bg-body {
+		background-color: var(--#{$prefix}body-bg) !important;	
+	}
+}
+
+// Dark Gradient mode
+[data-bs-theme="dark_gradient"] {
+	.theme-light-show {
+		display: none !important;		
+	}
+
+	.theme-dark-bg-transparent {
+		background-color: transparent !important;	
+	}
+
+	.theme-dark-bg-body {
+		background-color: var(--#{$prefix}body-bg) !important;	
+	}
+}
