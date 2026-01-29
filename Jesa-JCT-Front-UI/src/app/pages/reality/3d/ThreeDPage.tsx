@@ -1,14 +1,22 @@
 /**
- * 3D Model Viewer Page - FIXED FULLSCREEN
- * Filters stay properly positioned on the right in fullscreen
+ * 3D Model Viewer Page - CORRECT FOR YOUR API
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { ViewerProvider, useViewer } from './contexts/ViewerContext';
 import { ProjectNavigation } from './components/ProjectNavigation';
 import { Viewer } from './components/Viewer';
-import { StatusFiltersHorizontal } from './components/Statusfiltershorizontal';
+import { StatusFiltersHorizontal } from './components/StatusFiltersHorizontal';
 import { PropertiesPanel } from './components/PropertiesPanel';
+import { VersionSelector } from './components/VersionSelector';
+
+interface AccVersion {
+  versionUrn: string;
+  versionNumber: number;
+  name: string;
+  fileType: string;
+  derivativeUrnBase64: string;
+}
 
 export function ThreeDPage() {
   return (
@@ -24,14 +32,38 @@ function ThreeDContent() {
   const [showProperties, setShowProperties] = useState(true);
   const { state, loadModel } = useViewer();
 
-  // Refresh: reload the current model
   const handleRefresh = useCallback(() => {
     if (state.currentUrn && state.currentModelName) {
-      loadModel(state.currentUrn, state.currentModelName);
+      loadModel(
+        state.currentUrn, 
+        state.currentModelName,
+        state.currentProjectId || undefined,
+        state.currentItemId || undefined,
+        state.currentVersionId || undefined
+      );
     }
-  }, [state.currentUrn, state.currentModelName, loadModel]);
+  }, [
+    state.currentUrn, 
+    state.currentModelName, 
+    state.currentProjectId,
+    state.currentItemId,
+    state.currentVersionId,
+    loadModel
+  ]);
 
-  // Fullscreen toggle
+  const handleVersionSelect = useCallback((version: AccVersion) => {
+    console.log('Switching to version:', version.versionNumber);
+    
+    // Your API returns derivativeUrnBase64 which is what the viewer needs
+    loadModel(
+      version.derivativeUrnBase64,
+      `${version.name} (v${version.versionNumber})`,
+      state.currentProjectId || undefined,
+      state.currentItemId || undefined,
+      version.versionUrn  // Use versionUrn as the ID
+    );
+  }, [state.currentProjectId, state.currentItemId, loadModel]);
+
   const handleFullscreen = useCallback(() => {
     const container = viewerContainerRef.current;
     if (!container) return;
@@ -49,7 +81,6 @@ function ThreeDContent() {
     }
   }, []);
 
-  // Listen for fullscreen changes
   const handleFullscreenChange = useCallback(() => {
     setIsFullscreen(!!document.fullscreenElement);
   }, []);
@@ -61,7 +92,6 @@ function ThreeDContent() {
 
   return (
     <div className="d-flex flex-column flex-column-fluid">
-      {/* Page Header - Hidden in fullscreen */}
       {!isFullscreen && (
         <>
           <div className="mb-5">
@@ -71,14 +101,11 @@ function ThreeDContent() {
             </p>
           </div>
 
-          {/* Navigation Hierarchy */}
           <ProjectNavigation />
         </>
       )}
 
-      {/* Main 3D Viewer Layout - REDESIGNED */}
       <div className="row g-5">
-        {/* Main Viewer Area - Full Width or with collapsible sidebar */}
         <div className={showProperties && !isFullscreen ? "col-lg-9" : "col-lg-12"}>
           <div 
             className="card card-flush h-100" 
@@ -94,19 +121,46 @@ function ThreeDContent() {
               borderRadius: 0,
             } : {}}
           >
-            {/* Card Header with Horizontal Filters */}
             <div className="card-header align-items-stretch py-3" style={{
               display: 'flex',
               flexDirection: 'column',
               background: isFullscreen ? 'rgba(0, 0, 0, 0.8)' : undefined,
             }}>
-              {/* Row 1: Title + Actions on left, Stats on right */}
               <div className="d-flex align-items-center justify-content-between mb-3">
-                <h3 className="card-title mb-0" style={{ color: isFullscreen ? 'white' : undefined }}>
-                  <i className="fa-solid fa-cube me-2"></i>
-                  3D Viewer
-                </h3>
-                <div className="card-toolbar d-flex gap-2">
+                <div className="d-flex align-items-center gap-3">
+                  <h3 className="card-title mb-0" style={{ color: isFullscreen ? 'white' : undefined }}>
+                    <i className="fa-solid fa-cube me-2"></i>
+                    3D Viewer
+                  </h3>
+                  
+                  {state.currentModelName && (
+                    <span 
+                      className="badge badge-light-info fw-semibold fs-7"
+                      style={{ color: isFullscreen ? 'white' : undefined }}
+                    >
+                      {state.currentModelName}
+                    </span>
+                  )}
+                </div>
+
+                <div className="card-toolbar d-flex gap-2 align-items-center">
+                  <VersionSelector
+                    projectId={state.currentProjectId}
+                    itemId={state.currentItemId}
+                    currentVersionId={state.currentVersionId}
+                    onVersionSelect={handleVersionSelect}
+                    isLoading={state.isLoading}
+                  />
+
+                  {state.currentProjectId && state.currentItemId && (
+                    <div style={{ 
+                      width: '1px', 
+                      height: '30px', 
+                      background: isFullscreen ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                      margin: '0 5px' 
+                    }} />
+                  )}
+
                   <button
                     className="btn btn-sm btn-icon btn-light-primary"
                     onClick={handleRefresh}
@@ -134,7 +188,6 @@ function ThreeDContent() {
                 </div>
               </div>
 
-              {/* Row 2: Horizontal Filters Bar */}
               <div style={isFullscreen ? { 
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: '8px',
@@ -144,7 +197,6 @@ function ThreeDContent() {
               </div>
             </div>
 
-            {/* Viewer Body */}
             <div className="card-body p-0">
               <div
                 style={{
@@ -162,7 +214,6 @@ function ThreeDContent() {
           </div>
         </div>
 
-        {/* Right Panel: Properties - Collapsible, Hidden in fullscreen */}
         {showProperties && !isFullscreen && (
           <div className="col-lg-3">
             <PropertiesPanel />
@@ -170,9 +221,7 @@ function ThreeDContent() {
         )}
       </div>
 
-      {/* CSS for fullscreen improvements */}
       <style>{`
-        /* Ensure fullscreen container takes full space */
         .card:fullscreen {
           width: 100vw !important;
           height: 100vh !important;
@@ -182,7 +231,6 @@ function ThreeDContent() {
           border-radius: 0 !important;
         }
 
-        /* Improve filter button contrast in fullscreen */
         .card:fullscreen .btn-light-primary {
           background: rgba(54, 153, 255, 0.2) !important;
           border-color: rgba(54, 153, 255, 0.3) !important;
@@ -193,7 +241,6 @@ function ThreeDContent() {
           background: rgba(54, 153, 255, 0.3) !important;
         }
 
-        /* Make stats more visible in fullscreen */
         .card:fullscreen .bg-light-primary {
           background: rgba(54, 153, 255, 0.15) !important;
         }
@@ -204,6 +251,10 @@ function ThreeDContent() {
 
         .card:fullscreen .text-gray-600 {
           color: rgba(255, 255, 255, 0.7) !important;
+        }
+
+        .card-toolbar {
+          position: relative;
         }
       `}</style>
     </div>

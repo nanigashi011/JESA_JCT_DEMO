@@ -35,10 +35,10 @@ export interface AccContent {
 
 export interface AccVersion {
   versionUrn: string;
-  versionNumber?: number;
+  versionNumber: number;
   name: string;
-  fileType?: string;
-  derivativeUrnBase64?: string;
+  fileType: string;
+  derivativeUrnBase64: string;
 }
 
 export interface AccTreeNode {

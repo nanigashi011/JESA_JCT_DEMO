@@ -1,11 +1,11 @@
 /**
- * Project Navigation Component
+ * Project Navigation Component - FIXED WITH VERSION SUPPORT
  * Hierarchical navigation: Hub → Project → Area → Phase
  * With integrated search and auto-centering
  */
 
 import { useState, useEffect } from 'react';
-import { getHubs, getProjects, getProjectTree } from '../services/api';
+import { getHubs, getProjects, getProjectTree, getItemVersions } from '../services/api';
 import { useViewer } from '../contexts/ViewerContext';
 import { SearchBar } from './SearchBar';
 import type { AccHub, AccProject, AccTreeNode } from '../types';
@@ -88,16 +88,61 @@ export function ProjectNavigation() {
     }
   };
 
-  const onFileSelect = (node: AccTreeNode) => {
+  // FIXED: Now fetches versions and passes all required parameters
+  const onFileSelect = async (node: AccTreeNode) => {
     console.log('=== FILE SELECTED ===', node);
     console.log('node.type:', node.type);
     console.log('node.tipVersionUrn:', node.tipVersionUrn);
 
-    if (node.type === 'item' && node.tipVersionUrn) {
-      console.log('Calling loadModel with URN:', node.tipVersionUrn);
-      loadModel(node.tipVersionUrn, node.name);
-    } else {
+    if (node.type !== 'item' || !node.tipVersionUrn) {
       console.log('Skipping - not an item or no tipVersionUrn');
+      return;
+    }
+
+    if (!selectedProject) {
+      console.error('No project selected');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Fetch all versions for this item
+      console.log('Fetching versions for item:', node.id);
+      const versions = await getItemVersions(selectedProject, node.id);
+      
+      if (versions.length === 0) {
+        alert('No versions available for this model');
+        return;
+      }
+
+      console.log('Found versions:', versions.length, 'versions');
+
+      // Get the latest version (first in array)
+      const latestVersion = versions[0];
+      
+      // Load model with ALL required parameters for version selector
+      console.log('Loading model with version support:', {
+        urn: latestVersion.derivativeUrnBase64,
+        name: latestVersion.name,
+        projectId: selectedProject,
+        itemId: node.id,
+        versionId: latestVersion.versionUrn,
+        versionNumber: latestVersion.versionNumber
+      });
+
+      loadModel(
+        latestVersion.derivativeUrnBase64,  // URN for viewer
+        latestVersion.name,                  // Display name
+        selectedProject,                     // ✅ Project ID - enables version selector
+        node.id,                             // ✅ Item ID - enables version selector
+        latestVersion.versionUrn             // ✅ Version URN - tracks current version
+      );
+    } catch (error) {
+      console.error('Error loading model versions:', error);
+      alert('Failed to load model: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
 
