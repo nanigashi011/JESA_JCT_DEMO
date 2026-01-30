@@ -137,9 +137,9 @@ interface ViewerContextType {
 const ViewerContext = createContext<ViewerContextType | null>(null);
 
 const STATUS_COLOR_PALETTE = [
-  '#F59E0B', // Orange
   '#3B82F6', // Blue
   '#10B981', // Green
+  '#F59E0B', // Orange
   '#EF4444', // Red
   '#8B5CF6', // Purple
   '#06B6D4', // Cyan
