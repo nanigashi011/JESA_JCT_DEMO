@@ -9,6 +9,7 @@ import { Viewer } from './components/Viewer';
 import { StatusFiltersHorizontal } from './components/StatusFiltersHorizontal';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { VersionSelector } from './components/VersionSelector';
+import { DisciplineFilter } from "./components/DisciplineFilter";
 
 interface AccVersion {
   versionUrn: string;
@@ -26,11 +27,38 @@ export function ThreeDPage() {
   );
 }
 
+// Utils — outside the component
+function getDiscipline(viewer: any, dbId: number) {
+  const tree = viewer.model.getInstanceTree();
+
+  const getName = (id: number) => tree.getNodeName(id);
+  const getParent = (id: number) =>
+    tree.getNodeParentId ? tree.getNodeParentId(id) : tree.getParentId(id);
+
+  let current = dbId;
+
+  while (current) {
+    const parent = getParent(current);
+    if (!parent) break;
+
+    const parentName = getName(parent);
+
+    // S15 is the discipline container in your model
+    if (parentName === "S15") {
+      return getName(current); // Civil, Piping, Electrical, Instrumentation
+    }
+
+    current = parent;
+  }
+
+  return "Unknown";
+}
+
 function ThreeDContent() {
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProperties, setShowProperties] = useState(true);
-  const { state, loadModel } = useViewer();
+  const { state, loadModel, viewerRef } = useViewer();
 
   const handleRefresh = useCallback(() => {
     if (state.currentUrn && state.currentModelName) {
@@ -185,6 +213,7 @@ function ThreeDContent() {
                       <i className={`fa-solid ${showProperties ? 'fa-chevron-right' : 'fa-chevron-left'}`}></i>
                     </button>
                   )}
+                  
                 </div>
               </div>
 

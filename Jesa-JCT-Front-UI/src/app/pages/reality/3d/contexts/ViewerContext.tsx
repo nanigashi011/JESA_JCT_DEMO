@@ -6,6 +6,7 @@ import { createContext, useContext, useReducer, useRef, type ReactNode } from 'r
 import type { SelectedElement, ElementStatus, ViewerStats, StatusFilter, ModelArea, ModelPhase, HierarchySelection } from '../types';
 
 interface ViewerState {
+  viewer: Autodesk.Viewing.GuiViewer3D | null; // Add this line
   isViewerInitialized: boolean;
   isLoading: boolean;
   error: string | null;
@@ -23,11 +24,13 @@ interface ViewerState {
 }
 
 type ViewerAction =
+  | { type: 'SET_VIEWER'; payload: Autodesk.Viewing.GuiViewer3D | null } // Add this line
   | { type: 'SET_INITIALIZED'; payload: boolean }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_CURRENT_MODEL'; payload: { urn: string | null; name: string | null; projectId: string | null; itemId: string | null; versionId: string | null } }
   | { type: 'SET_SELECTED_ELEMENT'; payload: SelectedElement | null }
+  | { type: 'SET_STATUS_FILTERS'; payload: StatusFilter[] }  // ← ADD THIS LINE
   | { type: 'TOGGLE_STATUS_FILTER'; payload: ElementStatus }
   | { type: 'SET_STATS'; payload: ViewerStats }
   | { type: 'UPDATE_FILTER_COUNTS'; payload: Record<ElementStatus, number> }
@@ -35,14 +38,9 @@ type ViewerAction =
   | { type: 'SET_PHASES'; payload: ModelPhase[] }
   | { type: 'SET_HIERARCHY_SELECTION'; payload: HierarchySelection };
 
-const initialFilters: StatusFilter[] = [
-  { status: 'design', label: 'Under Design', color: '#3B82F6', count: 0, active: true },
-  { status: 'issued', label: 'IFC Issued', color: '#10B981', count: 0, active: true },
-  { status: 'construction', label: 'Under Construction', color: '#F59E0B', count: 0, active: true },
-  { status: 'waiting', label: 'Waiting Material', color: '#EF4444', count: 0, active: true },
-];
 
 const initialState: ViewerState = {
+  viewer: null, // Initialize viewer as null
   isViewerInitialized: false,
   isLoading: false,
   error: null,
@@ -52,7 +50,7 @@ const initialState: ViewerState = {
   currentItemId: null,
   currentVersionId: null,
   selectedElement: null,
-  statusFilters: initialFilters,
+  statusFilters: [],
   stats: { total: 0, displayed: 0, byStatus: { design: 0, issued: 0, construction: 0, waiting: 0 } },
   areas: [],
   phases: [],
@@ -61,12 +59,16 @@ const initialState: ViewerState = {
 
 function viewerReducer(state: ViewerState, action: ViewerAction): ViewerState {
   switch (action.type) {
+    case 'SET_VIEWER': // Add this case
+      return { ...state, viewer: action.payload };
     case 'SET_INITIALIZED':
       return { ...state, isViewerInitialized: action.payload };
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     case 'SET_ERROR':
       return { ...state, error: action.payload };
+    case 'SET_STATUS_FILTERS':  // ← ADD THIS CASE
+      return { ...state, statusFilters: action.payload };  
     case 'SET_CURRENT_MODEL':
       return { 
         ...state, 
@@ -110,6 +112,7 @@ type ElementStatusMap = Map<number, ElementStatus>;
 
 interface ViewerContextType {
   state: ViewerState;
+  setViewer: (viewer: Autodesk.Viewing.GuiViewer3D | null) => void; // Add this line
   viewerRef: React.MutableRefObject<Autodesk.Viewing.GuiViewer3D | null>;
   elementStatusMap: React.MutableRefObject<ElementStatusMap>;
   setInitialized: (value: boolean) => void;
@@ -133,17 +136,27 @@ interface ViewerContextType {
 
 const ViewerContext = createContext<ViewerContextType | null>(null);
 
-const STATUS_COLORS: Record<ElementStatus, { r: number; g: number; b: number }> = {
-  design: { r: 59, g: 130, b: 246 },
-  issued: { r: 16, g: 185, b: 129 },
-  construction: { r: 245, g: 158, b: 11 },
-  waiting: { r: 239, g: 68, b: 68 },
-};
+const STATUS_COLOR_PALETTE = [
+  '#F59E0B', // Orange
+  '#3B82F6', // Blue
+  '#10B981', // Green
+  '#EF4444', // Red
+  '#8B5CF6', // Purple
+  '#06B6D4', // Cyan
+  '#F97316', // Dark Orange
+  '#14B8A6', // Teal
+  '#EC4899', // Pink
+  '#84CC16', // Lime
+];
 
 export function ViewerProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(viewerReducer, initialState);
   const viewerRef = useRef<Autodesk.Viewing.GuiViewer3D | null>(null);
   const elementStatusMap = useRef<ElementStatusMap>(new Map());
+
+  const setViewer = (viewer: Autodesk.Viewing.GuiViewer3D | null) => {
+    dispatch({ type: 'SET_VIEWER', payload: viewer });
+  };
 
   const setInitialized = (value: boolean) => {
     dispatch({ type: 'SET_INITIALIZED', payload: value });
@@ -380,46 +393,141 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
 
   const initializeElementStatuses = () => {
     const viewer = viewerRef.current;
-    if (!viewer) return;
+    if (!viewer?.model) return;
 
-    const model = viewer.model;
-    if (!model) return;
-
-    const instanceTree = model.getInstanceTree();
+    const instanceTree = viewer.model.getInstanceTree();
     if (!instanceTree) return;
 
-    const statuses: ElementStatus[] = ['design', 'issued', 'construction', 'waiting'];
-    const statusCounts: Record<ElementStatus, number> = { design: 0, issued: 0, construction: 0, waiting: 0 };
+    console.log('🔍 Scanning model for status values...');
+
+    // Step 1: Discover unique status values
+    const statusValuesSet = new Set<string>();
+    let totalElements = 0;
+    let scannedElements = 0;
+
+    instanceTree.enumNodeChildren(instanceTree.getRootId(), (dbId: number) => {
+      if (instanceTree.getChildCount(dbId) === 0) totalElements++;
+    }, true);
+
+    console.log(`Found ${totalElements} elements to scan`);
+
+    // Scan all elements
+    instanceTree.enumNodeChildren(instanceTree.getRootId(), (dbId: number) => {
+      if (instanceTree.getChildCount(dbId) === 0) {
+        (viewer as any).getProperties(dbId, (result: any) => {
+          const statusProp = result.properties.find((p: any) => 
+            p.displayName === 'Status'
+          );
+
+          if (statusProp?.displayValue) {
+            statusValuesSet.add(statusProp.displayValue);
+          }
+
+          scannedElements++;
+
+          // When scan complete, create filters
+          if (scannedElements === totalElements) {
+            const uniqueStatuses = Array.from(statusValuesSet).sort();
+            console.log('✅ Found unique status values:', uniqueStatuses);
+
+            // Create dynamic filters
+            const dynamicFilters: StatusFilter[] = uniqueStatuses.map((statusValue, index) => ({
+              status: statusValue.toLowerCase().replace(/\s+/g, '_') as ElementStatus,
+              label: statusValue,
+              color: STATUS_COLOR_PALETTE[index % STATUS_COLOR_PALETTE.length],
+              count: 0,
+              active: true,
+            }));
+
+            dispatch({ type: 'SET_STATUS_FILTERS', payload: dynamicFilters });
+
+            // Now process elements with these filters
+            processElementStatuses(viewer, instanceTree, dynamicFilters);
+          }
+        });
+      }
+    }, true);
+  };
+
+  const processElementStatuses = (
+    viewer: Autodesk.Viewing.GuiViewer3D,
+    instanceTree: any,
+    filters: StatusFilter[]
+  ) => {
+    console.log('🎨 Processing element statuses...');
+
+    const statusCounts: Record<string, number> = {};
+    filters.forEach(f => statusCounts[f.status] = 0);
+
     const newMap = new Map<number, ElementStatus>();
     let totalElements = 0;
+    let processedElements = 0;
+
+    instanceTree.enumNodeChildren(instanceTree.getRootId(), (dbId: number) => {
+      if (instanceTree.getChildCount(dbId) === 0) totalElements++;
+    }, true);
+
+    const statusMap = new Map<string, StatusFilter>();
+    filters.forEach(filter => {
+      statusMap.set(filter.label.toLowerCase(), filter);
+    });
 
     instanceTree.enumNodeChildren(instanceTree.getRootId(), (dbId: number) => {
       if (instanceTree.getChildCount(dbId) === 0) {
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        newMap.set(dbId, status);
-        statusCounts[status]++;
-        totalElements++;
+        (viewer as any).getProperties(dbId, (result: any) => {
+          const statusProp = result.properties.find((p: any) => 
+            p.displayName === 'Status'
+          );
 
-        const color = STATUS_COLORS[status];
-        viewer.setThemingColor(dbId, new window.THREE.Vector4(color.r / 255, color.g / 255, color.b / 255, 1));
+          let matchedFilter = filters[0]; // Default
+
+          if (statusProp?.displayValue) {
+            const found = statusMap.get(statusProp.displayValue.toLowerCase());
+            if (found) matchedFilter = found;
+          }
+
+          newMap.set(dbId, matchedFilter.status);
+          statusCounts[matchedFilter.status]++;
+          processedElements++;
+
+          // Apply color
+          const colorHex = matchedFilter.color.replace('#', '');
+          const r = parseInt(colorHex.substr(0, 2), 16);
+          const g = parseInt(colorHex.substr(2, 2), 16);
+          const b = parseInt(colorHex.substr(4, 2), 16);
+          
+          viewer.setThemingColor(
+            dbId,
+            new window.THREE.Vector4(r / 255, g / 255, b / 255, 1)
+          );
+
+          if (processedElements === totalElements) {
+            elementStatusMap.current = newMap;
+
+            console.log('✅ Complete:');
+            filters.forEach(f => {
+              console.log(`  ${f.label}: ${statusCounts[f.status]}`);
+            });
+
+            const updatedFilters = filters.map(f => ({
+              ...f,
+              count: statusCounts[f.status] || 0,
+            }));
+
+            dispatch({ type: 'SET_STATUS_FILTERS', payload: updatedFilters });
+
+            dispatch({
+              type: 'SET_STATS',
+              payload: {
+                total: processedElements,
+                displayed: processedElements,
+                byStatus: statusCounts,
+              },
+            });
+          }
+        });
       }
     }, true);
-
-    elementStatusMap.current = newMap;
-
-    dispatch({
-      type: 'SET_STATS',
-      payload: {
-        total: totalElements,
-        displayed: totalElements,
-        byStatus: statusCounts,
-      },
-    });
-
-    dispatch({
-      type: 'UPDATE_FILTER_COUNTS',
-      payload: statusCounts,
-    });
   };
 
   const applyStatusFilters = () => {
@@ -460,6 +568,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     <ViewerContext.Provider
       value={{
         state,
+        setViewer, // Add this here
         viewerRef,
         elementStatusMap,
         setInitialized,

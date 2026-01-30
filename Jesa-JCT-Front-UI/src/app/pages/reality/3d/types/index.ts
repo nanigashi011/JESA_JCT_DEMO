@@ -66,7 +66,7 @@ export interface ManifestStatus {
 }
 
 // Element Status for construction tracking
-export type ElementStatus = 'design' | 'issued' | 'construction' | 'waiting';
+export type ElementStatus = string;
 
 export interface ElementProperty {
   label: string;
@@ -86,7 +86,7 @@ export interface SelectedElement {
 export interface ViewerStats {
   total: number;
   displayed: number;
-  byStatus: Record<ElementStatus, number>;
+  byStatus: Record<string, number>;
 }
 
 // Status filter configuration
