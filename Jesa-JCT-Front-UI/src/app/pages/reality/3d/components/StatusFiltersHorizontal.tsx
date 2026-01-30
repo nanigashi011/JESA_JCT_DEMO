@@ -8,7 +8,17 @@ import type { StatusFilter } from '../types';
 
 export function StatusFiltersHorizontal() {
   const { state, toggleStatusFilter } = useViewer();
-
+  // Show loading state
+  if (state.isLoading && state.statusFilters.length === 0) {
+    return (
+      <div className="d-flex align-items-center gap-2">
+        <span className="text-gray-600">
+          <i className="fa-solid fa-spinner fa-spin me-2"></i>
+          Loading status filters...
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="d-flex justify-content-between align-items-center gap-4 flex-wrap">
       {/* Left Side: Filter Label + Chips */}

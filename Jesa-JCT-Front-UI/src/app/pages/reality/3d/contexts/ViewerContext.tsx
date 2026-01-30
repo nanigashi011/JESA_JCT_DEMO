@@ -31,6 +31,7 @@ type ViewerAction =
   | { type: 'SET_CURRENT_MODEL'; payload: { urn: string | null; name: string | null; projectId: string | null; itemId: string | null; versionId: string | null } }
   | { type: 'SET_SELECTED_ELEMENT'; payload: SelectedElement | null }
   | { type: 'SET_STATUS_FILTERS'; payload: StatusFilter[] }  // ← ADD THIS LINE
+  | { type: 'CLEAR_STATUS_FILTERS' }  // ← ADD THIS LINE
   | { type: 'TOGGLE_STATUS_FILTER'; payload: ElementStatus }
   | { type: 'SET_STATS'; payload: ViewerStats }
   | { type: 'UPDATE_FILTER_COUNTS'; payload: Record<ElementStatus, number> }
@@ -69,6 +70,12 @@ function viewerReducer(state: ViewerState, action: ViewerAction): ViewerState {
       return { ...state, error: action.payload };
     case 'SET_STATUS_FILTERS':  // ← ADD THIS CASE
       return { ...state, statusFilters: action.payload };  
+    case 'CLEAR_STATUS_FILTERS':  // ← ADD THIS CASE
+      return { 
+        ...state, 
+        statusFilters: [],
+        stats: { total: 0, displayed: 0, byStatus: {} }
+      };
     case 'SET_CURRENT_MODEL':
       return { 
         ...state, 
@@ -137,9 +144,9 @@ interface ViewerContextType {
 const ViewerContext = createContext<ViewerContextType | null>(null);
 
 const STATUS_COLOR_PALETTE = [
-  '#3B82F6', // Blue
   '#10B981', // Green
   '#F59E0B', // Orange
+  '#3B82F6', // Blue
   '#EF4444', // Red
   '#8B5CF6', // Purple
   '#06B6D4', // Cyan
@@ -177,6 +184,9 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     itemId?: string, 
     versionId?: string
   ) => {
+    // Clear old filters immediately
+    dispatch({ type: 'CLEAR_STATUS_FILTERS' });
+    
     dispatch({ 
       type: 'SET_CURRENT_MODEL', 
       payload: { 

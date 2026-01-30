@@ -25,6 +25,7 @@ export function Viewer() {
     setLoading,
     setError,
     selectElement,
+    setStats,  // ← ADD THIS LINE
     initializeElementStatuses,
     applyStatusFilters,
     extractModelHierarchy,
@@ -109,6 +110,8 @@ export function Viewer() {
     if (!state.isViewerInitialized || !state.currentUrn || !viewerRef.current) return;
 
     const loadModel = () => {
+      // Clear old stats immediately
+      setStats({ total: 0, displayed: 0, byStatus: {} });
       setLoading(true);
       setError(null);
       setProgress({ state: 'initializing', percent: 0, message: 'Connecting to Autodesk servers...' });
